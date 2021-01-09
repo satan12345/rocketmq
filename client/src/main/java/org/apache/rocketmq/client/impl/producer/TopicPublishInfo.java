@@ -70,15 +70,25 @@ public class TopicPublishInfo {
     }
 
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
+        //第一次 发送消息 lastBrokerName为空
         if (lastBrokerName == null) {
+            //选择一个messageQueue
             return selectOneMessageQueue();
         } else {
+            //上一次的brokerName不为空
             for (int i = 0; i < this.messageQueueList.size(); i++) {
                 int index = this.sendWhichQueue.getAndIncrement();
                 int pos = Math.abs(index) % this.messageQueueList.size();
-                if (pos < 0)
+                if (pos < 0){
                     pos = 0;
+                }
                 MessageQueue mq = this.messageQueueList.get(pos);
+                /**
+                 * 对比此次选中的MessageQueue与上一次发送消息的brokerName
+                 * 如果不通则选择该brokerName发送
+                 * 如果只有一个broker 那么整个循环走完 也不会进入if里面 则
+                 * 执行后面的selectOneMessageQueue()方法
+                 */
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }
@@ -88,10 +98,14 @@ public class TopicPublishInfo {
     }
 
     public MessageQueue selectOneMessageQueue() {
+        //获得索引
         int index = this.sendWhichQueue.getAndIncrement();
+        //用队列数量取模
         int pos = Math.abs(index) % this.messageQueueList.size();
-        if (pos < 0)
+        if (pos < 0){
             pos = 0;
+        }
+        //获取指定位置的索引
         return this.messageQueueList.get(pos);
     }
 

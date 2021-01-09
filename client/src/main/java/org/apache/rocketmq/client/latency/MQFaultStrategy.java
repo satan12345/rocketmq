@@ -25,7 +25,9 @@ import org.apache.rocketmq.common.message.MessageQueue;
 public class MQFaultStrategy {
     private final static InternalLogger log = ClientLogger.getLog();
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
-
+    /**
+     * 消息发送失败 默认延迟机制
+     */
     private boolean sendLatencyFaultEnable = false;
 
     private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
@@ -56,18 +58,24 @@ public class MQFaultStrategy {
     }
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
+
         if (this.sendLatencyFaultEnable) {
+            //启用broker启用故障一尺机制
             try {
+                //sendWhichQueue自增
                 int index = tpInfo.getSendWhichQueue().getAndIncrement();
                 for (int i = 0; i < tpInfo.getMessageQueueList().size(); i++) {
                     int pos = Math.abs(index++) % tpInfo.getMessageQueueList().size();
                     if (pos < 0)
                         pos = 0;
+                    //选择topic 的selectQueue
                     MessageQueue mq = tpInfo.getMessageQueueList().get(pos);
-                    if (latencyFaultTolerance.isAvailable(mq.getBrokerName()))
+                    //校验broker是否可用 可用直接返回
+                    if (latencyFaultTolerance.isAvailable(mq.getBrokerName())){
                         return mq;
+                    }
                 }
-
+                //从规避的broker中获取一个相对比较好的Broker
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
