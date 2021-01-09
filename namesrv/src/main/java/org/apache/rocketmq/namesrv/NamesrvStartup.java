@@ -54,7 +54,9 @@ public class NamesrvStartup {
     public static NamesrvController main0(String[] args) {
 
         try {
+            //创建nameServController
             NamesrvController controller = createNamesrvController(args);
+            //启动controller
             start(controller);
             String tip = "The Name Server boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
             log.info(tip);
@@ -78,10 +80,12 @@ public class NamesrvStartup {
             System.exit(-1);
             return null;
         }
-
+        //创建nameSerConfig 与NettyServerConfig 两个配置类
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+        //设置启动端口号
         nettyServerConfig.setListenPort(9876);
+//        解析启动-c参数  -c 后面可以指定属性配置文件位置
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
@@ -98,7 +102,7 @@ public class NamesrvStartup {
             }
         }
 
-        if (commandLine.hasOption('p')) {
+        if (commandLine.hasOption('p')) {// -p 属性名=属性值
             InternalLogger console = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_CONSOLE_NAME);
             MixAll.printObjectProperties(console, namesrvConfig);
             MixAll.printObjectProperties(console, nettyServerConfig);
@@ -122,7 +126,7 @@ public class NamesrvStartup {
 
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
-
+        //创建nameSerController
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
@@ -136,13 +140,13 @@ public class NamesrvStartup {
         if (null == controller) {
             throw new IllegalArgumentException("NamesrvController is null");
         }
-
+        //controller的初始化
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
-
+        //注册了一个钩子方法 在jvm退出的时候 释放controller资源
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -150,7 +154,7 @@ public class NamesrvStartup {
                 return null;
             }
         }));
-
+        //启动controller
         controller.start();
 
         return controller;

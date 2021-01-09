@@ -74,22 +74,19 @@ public class NamesrvController {
     }
 
     public boolean initialize() {
-
+        //加载kv属性配置
         this.kvConfigManager.load();
-
+        //创建NettyServer网络处理对象
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
-
+        //创建了一个线程池
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
-
+        //注册处理器
         this.registerProcessor();
-
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                NamesrvController.this.routeInfoManager.scanNotActiveBroker();
-            }
+        //创建定时任务 延迟5秒 以后每10s执行一次
+        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+            //扫描不活跃的Broker
+            NamesrvController.this.routeInfoManager.scanNotActiveBroker();
         }, 5, 10, TimeUnit.SECONDS);
 
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
@@ -147,7 +144,6 @@ public class NamesrvController {
             this.remotingServer.registerDefaultProcessor(new ClusterTestRequestProcessor(this, namesrvConfig.getProductEnvName()),
                 this.remotingExecutor);
         } else {
-
             this.remotingServer.registerDefaultProcessor(new DefaultRequestProcessor(this), this.remotingExecutor);
         }
     }
