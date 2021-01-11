@@ -395,6 +395,7 @@ public class ConsumeQueue {
                         topic, queueId, request.getCommitLogOffset());
                 }
             }
+            //将消息的偏移量 消息的大小 tagsCode consumerQueue的偏移量写入
             boolean result = this.putMessagePositionInfo(request.getCommitLogOffset(),
                 request.getMsgSize(), tagsCode, request.getConsumeQueueOffset());
             if (result) {
@@ -471,6 +472,7 @@ public class ConsumeQueue {
                 }
             }
             this.maxPhysicOffset = offset + size;
+            //追加数据
             return mappedFile.appendMessage(this.byteBufferIndex.array());
         }
         return false;

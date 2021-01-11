@@ -148,7 +148,7 @@ public class DefaultMessageStore implements MessageStore {
      */
     private AtomicLong printTimes = new AtomicLong(0);
     /**
-     * commitLog转发请求
+     * commitLog需要转发的集合
      */
     private final LinkedList<CommitLogDispatcher> dispatcherList;
 
@@ -198,7 +198,7 @@ public class DefaultMessageStore implements MessageStore {
         this.allocateMappedFileService.start();
 
         this.indexService.start();
-
+        //添加commitLog分发的实现类
         this.dispatcherList = new LinkedList<>();
         this.dispatcherList.addLast(new CommitLogDispatcherBuildConsumeQueue());
         this.dispatcherList.addLast(new CommitLogDispatcherBuildIndex());
@@ -305,6 +305,7 @@ public class DefaultMessageStore implements MessageStore {
             log.info("[SetReputOffset] maxPhysicalPosInLogicQueue={} clMinOffset={} clMaxOffset={} clConfirmedOffset={}",
                 maxPhysicalPosInLogicQueue, this.commitLog.getMinOffset(), this.commitLog.getMaxOffset(), this.commitLog.getConfirmOffset());
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
+            //
             this.reputMessageService.start();
 
             /**
@@ -1566,7 +1567,9 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
+        //根据topic与队列找到ConsumerQueue
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
+
         cq.putMessagePositionInfoWrapper(dispatchRequest);
     }
 
@@ -1627,6 +1630,7 @@ public class DefaultMessageStore implements MessageStore {
             switch (tranType) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE:
                 case MessageSysFlag.TRANSACTION_COMMIT_TYPE:
+                    //数据分发
                     DefaultMessageStore.this.putMessagePositionInfo(request);
                     break;
                 case MessageSysFlag.TRANSACTION_PREPARED_TYPE:
@@ -1938,6 +1942,12 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     * 消息消费队文件、消息属性索引文件都是基于CommitLog文件构建的，当消息生产者提交的消息存储在CommitLog文件中，
+     * ConsumerQueue、IndexFile需要及时更新，否则消息无法及时被消费，根据消息属性查找消息也会出现较大延迟。
+     * RocketMQ通过开启一个线程ReputMessageService来准实时转发CommitLog文件更新事件，
+     * 相应的任务处理器根据转发的消息及时更新ConsumerQueue、IndexFile文件。
+     */
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;
@@ -1976,6 +1986,7 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         private void doReput() {
+            //判断转发的偏移量是否小于commitLog的最小的offset
             if (this.reputFromOffset < DefaultMessageStore.this.commitLog.getMinOffset()) {
                 log.warn("The reputFromOffset={} is smaller than minPyOffset={}, this usually indicate that the dispatch behind too much and the commitlog has expired.",
                     this.reputFromOffset, DefaultMessageStore.this.commitLog.getMinOffset());
@@ -2000,6 +2011,7 @@ public class DefaultMessageStore implements MessageStore {
 
                             if (dispatchRequest.isSuccess()) {
                                 if (size > 0) {
+                                    //分发消息
                                     DefaultMessageStore.this.doDispatch(dispatchRequest);
 
                                     if (BrokerRole.SLAVE != DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole()
@@ -2056,6 +2068,7 @@ public class DefaultMessageStore implements MessageStore {
 
             while (!this.isStopped()) {
                 try {
+                    //每隔1毫秒执行一次数据分发的逻辑
                     Thread.sleep(1);
                     this.doReput();
                 } catch (Exception e) {
