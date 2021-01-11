@@ -230,7 +230,7 @@ public class DefaultMessageStore implements MessageStore {
         boolean result = true;
 
         try {
-            //判断最后一次是否正常退出
+            //判断最后一次是否正常退出 如果有临时文件则表示非正常退出 返回true 取反返回false
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
             //加载延迟队列

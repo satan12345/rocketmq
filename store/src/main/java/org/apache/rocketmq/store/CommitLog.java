@@ -169,6 +169,7 @@ public class CommitLog {
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
+            //Broker正常停止再重启时 从倒数第三个开始恢复 不足三个文件则从第一个文件开始恢复
             // Began to recover from the last third file
             int index = mappedFiles.size() - 3;
             if (index < 0)
@@ -176,15 +177,25 @@ public class CommitLog {
 
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            //拿到上一次的处理位置
             long processOffset = mappedFile.getFileFromOffset();
             long mappedFileOffset = 0;
             while (true) {
+                //查找消息
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
+                //消息长度
                 int size = dispatchRequest.getMsgSize();
+                /**
+                 * 查找成功 并且消息长度大于0 mappedFileOffset向前移动
+                 */
                 // Normal data
                 if (dispatchRequest.isSuccess() && size > 0) {
                     mappedFileOffset += size;
                 }
+                /**
+                 * 如果查找结果为true 切消息长度为0 表示已经到该文件末尾 如果还有下一个文件
+                 * 则重置processOffset 和mappedFileOffset 否则跳出循环
+                 */
                 // Come the end of the file, switch to the next file Since the
                 // return 0 representatives met last hole,
                 // this can not be included in truncate offset
@@ -202,18 +213,19 @@ public class CommitLog {
                         log.info("recover next physics file, " + mappedFile.getFileName());
                     }
                 }
+                //如果查找结果为false 表示该文件未填满所有消息 跳出循环 结束循环
                 // Intermediate file read error
                 else if (!dispatchRequest.isSuccess()) {
                     log.info("recover physics file end, " + mappedFile.getFileName());
                     break;
                 }
             }
-
+            //更新mappedFileQueue的flushedWhere和committedWhere指针
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
             this.mappedFileQueue.truncateDirtyFiles(processOffset);
-
+            //删除offset之后的所有文件
             // Clear ConsumeQueue redundant data
             if (maxPhyOffsetOfConsumeQueue >= processOffset) {
                 log.warn("maxPhyOffsetOfConsumeQueue({}) >= processOffset({}), truncate dirty logic files", maxPhyOffsetOfConsumeQueue, processOffset);
@@ -421,6 +433,15 @@ public class CommitLog {
         this.confirmOffset = phyOffset;
     }
 
+    /**
+     * Broker异常停止文件恢复的实现为CommitLog#recoverAbnormally。
+     * 异常文件恢复步骤与正常停止文件恢复流程基本相同，其主要差别有两个。
+     * 首先，正常停止默认从倒数第三个文件开始进行恢复，
+     * 而异常停止则需要从最后一个文件往前走，
+     * 找到第一个消息存储正常的文件。
+     * 其次，如果CommitLog目录没有消息文件，如果消息消费队列目录下存在文件，则需要销毁。
+     * @param maxPhyOffsetOfConsumeQueue
+     */
     @Deprecated
     public void recoverAbnormally(long maxPhyOffsetOfConsumeQueue) {
         // recover by the minimum time stamp
@@ -432,12 +453,13 @@ public class CommitLog {
             MappedFile mappedFile = null;
             for (; index >= 0; index--) {
                 mappedFile = mappedFiles.get(index);
+                //判断消息文件是否是一个正确的文件
                 if (this.isMappedFileMatchedRecover(mappedFile)) {
                     log.info("recover from this mapped file " + mappedFile.getFileName());
                     break;
                 }
             }
-
+            //根据索引去除mappedFile
             if (index < 0) {
                 index = 0;
                 mappedFile = mappedFiles.get(index);
@@ -447,6 +469,7 @@ public class CommitLog {
             long processOffset = mappedFile.getFileFromOffset();
             long mappedFileOffset = 0;
             while (true) {
+                //验证消息的合法性 并将消息转发到消息队列和索引文件
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
                 int size = dispatchRequest.getMsgSize();
 
@@ -500,6 +523,7 @@ public class CommitLog {
         }
         // Commitlog case files are deleted
         else {
+            //如果commitlog已经被删除了 则重置flushWhere committedwhere  并销毁队列文件
             log.warn("The commitlog files are deleted, and delete the consume queue files");
             this.mappedFileQueue.setFlushedWhere(0);
             this.mappedFileQueue.setCommittedWhere(0);
