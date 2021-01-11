@@ -199,12 +199,15 @@ public class IndexService {
     }
 
     public void buildIndex(DispatchRequest req) {
+        //获取索引文件
         IndexFile indexFile = retryGetAndCreateIndexFile();
         if (indexFile != null) {
+            //获取索引文件的最大偏移量
             long endPhyOffset = indexFile.getEndPhyOffset();
             DispatchRequest msg = req;
             String topic = msg.getTopic();
             String keys = msg.getKeys();
+            //如果消息的commitLog偏移量小于物理文件的偏移量 则直接返回
             if (msg.getCommitLogOffset() < endPhyOffset) {
                 return;
             }
@@ -218,7 +221,7 @@ public class IndexService {
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE:
                     return;
             }
-
+            //判断是否存在唯一索引key 如果有 则创建key 然后写入到索引文件中
             if (req.getUniqKey() != null) {
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
@@ -232,6 +235,7 @@ public class IndexService {
                 for (int i = 0; i < keyset.length; i++) {
                     String key = keyset[i];
                     if (key.length() > 0) {
+                        //构建key 然后放置到索引文件中去
                         indexFile = putKey(indexFile, msg, buildKey(topic, key));
                         if (indexFile == null) {
                             log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
