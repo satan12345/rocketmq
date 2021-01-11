@@ -219,31 +219,38 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
+     * 由于RocketMQ存储首先将消息全量存储在CommitLog文件中，然后异步生成转发任务更新ConsumerQueue和Index文件。
+     * 如果消息成功存储到CommitLog文件中，转发任务未成功执行，此时消息服务器Broker由于某个原因宕机，
+     * 导致CommitLog、ConsumerQueue、IndexFile文件数据不一致。
+     * 如果不加以人工修复的话，会有一部分消息即便在CommitLog中文件中存在，但由于没有转发到ConsumerQueue，
+     * 这部分消息将永远复发被消费者消费。
      * @throws IOException
      */
     public boolean load() {
         boolean result = true;
 
         try {
+            //判断最后一次是否正常退出
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
-
+            //加载延迟队列
             if (null != scheduleMessageService) {
                 result = result && this.scheduleMessageService.load();
             }
-
+            //加载commitLog
             // load Commit Log
             result = result && this.commitLog.load();
-
+            //加载consumerQueue
             // load Consume Queue
             result = result && this.loadConsumeQueue();
 
             if (result) {
+                //加载文件监测点
                 this.storeCheckpoint =
                     new StoreCheckpoint(StorePathConfigHelper.getStoreCheckpoint(this.messageStoreConfig.getStorePathRootDir()));
-
+                //加载索引文件
                 this.indexService.load(lastExitOK);
-
+                //文件恢复
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
@@ -1426,6 +1433,10 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     *判断abort文件是否存在
+     * @return
+     */
     private boolean isTempFileExist() {
         String fileName = StorePathConfigHelper.getAbortFile(this.messageStoreConfig.getStorePathRootDir());
         File file = new File(fileName);
@@ -1473,8 +1484,10 @@ public class DefaultMessageStore implements MessageStore {
         long maxPhyOffsetOfConsumeQueue = this.recoverConsumeQueue();
 
         if (lastExitOK) {
+            //正常退出
             this.commitLog.recoverNormally(maxPhyOffsetOfConsumeQueue);
         } else {
+            //异常退出
             this.commitLog.recoverAbnormally(maxPhyOffsetOfConsumeQueue);
         }
 
