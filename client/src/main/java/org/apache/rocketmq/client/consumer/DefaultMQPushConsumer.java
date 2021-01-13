@@ -69,7 +69,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     protected final transient DefaultMQPushConsumerImpl defaultMQPushConsumerImpl;
 
-    /**
+    /** 消费者组
      * Consumers of the same role is required to have exactly same subscriptions and consumerGroup to correctly achieve
      * load balance. It's required and needs to be globally unique.
      * </p>
@@ -78,7 +78,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     private String consumerGroup;
 
-    /**
+    /**消息消费模式 默认集群模式
      * Message model defines the way how messages are delivered to each consumer clients.
      * </p>
      *
@@ -122,6 +122,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      * messages born prior to {@link #consumeTimestamp} will be ignored
      * </li>
      * </ul>
+     * 消费的偏移量（最大偏移量  最小偏移量  启动时间戳 ）开始消费
      */
     private ConsumeFromWhere consumeFromWhere = ConsumeFromWhere.CONSUME_FROM_LAST_OFFSET;
 
@@ -135,30 +136,33 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
 
     /**
      * Queue allocation algorithm specifying how message queues are allocated to each consumer clients.
+     * 集群模式下的消息队列负载策略
      */
     private AllocateMessageQueueStrategy allocateMessageQueueStrategy;
 
-    /**
+    /**订阅关系
      * Subscription relationship
      */
     private Map<String /* topic */, String /* sub expression */> subscription = new HashMap<String, String>();
 
     /**
+     * 消息监听者
      * Message listener
      */
     private MessageListener messageListener;
 
     /**
+     * 消息消费进度存储器
      * Offset Storage
      */
     private OffsetStore offsetStore;
 
-    /**
+    /**消费者最小线程数量
      * Minimum consumer thread number
      */
     private int consumeThreadMin = 20;
 
-    /**
+    /**消费者最大线程数量
      * Max consumer thread number
      */
     private int consumeThreadMax = 20;
@@ -169,11 +173,12 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     private long adjustThreadPoolNumsThreshold = 100000;
 
     /**
+     * 并发消息消费时处理队列最大跨度
      * Concurrently max span offset.it has no effect on sequential consumption
      */
     private int consumeConcurrentlyMaxSpan = 2000;
 
-    /**
+    /**每1000次流控后打印流控日志
      * Flow control threshold on queue level, each message queue will cache at most 1000 messages by default,
      * Consider the {@code pullBatchSize}, the instantaneous value may exceed the limit
      */
@@ -210,7 +215,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     private int pullThresholdSizeForTopic = -1;
 
-    /**
+    /**推模式下任务时间间隔
      * Message pull Interval
      */
     private long pullInterval = 0;
@@ -221,11 +226,12 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     private int consumeMessageBatchMaxSize = 1;
 
     /**
+     * 推模式下每次拉取的条数 默认32条
      * Batch pull size
      */
     private int pullBatchSize = 32;
 
-    /**
+    /**每次拉取之后是否更新订阅关系
      * Whether update subscription relationship when every pull
      */
     private boolean postSubscriptionWhenPull = false;
@@ -235,7 +241,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     private boolean unitMode = false;
 
-    /**
+    /**消费消息重试次数 -1 即默认16次
      * Max re-consume times. -1 means 16 times.
      * </p>
      *
@@ -249,7 +255,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     private long suspendCurrentQueueTimeMillis = 1000;
 
-    /**
+    /** 消息消费超时时间
      * Maximum amount of time in minutes a message may block the consuming thread.
      */
     private long consumeTimeout = 15;
@@ -694,7 +700,9 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      */
     @Override
     public void start() throws MQClientException {
+
         setConsumerGroup(NamespaceUtil.wrapNamespace(this.getNamespace(), this.consumerGroup));
+
         this.defaultMQPushConsumerImpl.start();
         if (null != traceDispatcher) {
             try {

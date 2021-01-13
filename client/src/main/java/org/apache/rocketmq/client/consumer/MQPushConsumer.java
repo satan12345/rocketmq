@@ -41,12 +41,21 @@ public interface MQPushConsumer extends MQConsumer {
     @Deprecated
     void registerMessageListener(MessageListener messageListener);
 
+    /**注册并发监听器
+     *
+     * @param messageListener
+     */
     void registerMessageListener(final MessageListenerConcurrently messageListener);
 
+    /**
+     * 注册顺序监听器
+     * @param messageListener
+     */
     void registerMessageListener(final MessageListenerOrderly messageListener);
 
     /**
      * Subscribe some topic
+     * 订阅主题消息消  息使用过滤表达式
      *
      * @param subExpression subscription expression.it only support or operation such as "tag1 || tag2 || tag3" <br> if
      * null or * expression,meaning subscribe
@@ -81,14 +90,14 @@ public interface MQPushConsumer extends MQConsumer {
      * <p>
      * Choose SQL92: {@link MessageSelector#bySql(java.lang.String)}
      * </p>
-     *
+     * 订阅主题消息 并指定队列选择器
      * @param selector message selector({@link MessageSelector}), can be null.
      */
     void subscribe(final String topic, final MessageSelector selector) throws MQClientException;
 
     /**
      * Unsubscribe consumption some topic
-     *
+     *取消主题订阅
      * @param topic message topic
      */
     void unsubscribe(final String topic);
