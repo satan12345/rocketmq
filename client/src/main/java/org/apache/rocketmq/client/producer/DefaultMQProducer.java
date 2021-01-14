@@ -59,6 +59,7 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
+     * 消息生产者的具体实现类
      * Wrapping internal implementations for virtually all methods presented in this class.
      */
     protected final transient DefaultMQProducerImpl defaultMQProducerImpl;
@@ -102,6 +103,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * <p>
      * This may potentially cause message duplication which is up to application developers to resolve.
      * 当同步发送消息失败时默认的重试次数
+     * 也就是一共有三次发送消息的机会
      */
     private int retryTimesWhenSendFailed = 2;
 

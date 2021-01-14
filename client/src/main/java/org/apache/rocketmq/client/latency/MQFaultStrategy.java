@@ -58,9 +58,9 @@ public class MQFaultStrategy {
     }
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
-
+        //是否开启高可用
         if (this.sendLatencyFaultEnable) {
-            //启用broker启用故障一尺机制
+            //启用broker启用故障转移机制
             try {
                 //sendWhichQueue自增
                 int index = tpInfo.getSendWhichQueue().getAndIncrement();

@@ -116,6 +116,7 @@ public class MQClientInstance {
     private final DefaultMQProducer defaultMQProducer;
     private final ConsumerStatsManager consumerStatsManager;
     private final AtomicLong sendHeartbeatTimesTotal = new AtomicLong(0);
+    //客户端实例状态
     private ServiceState serviceState = ServiceState.CREATE_JUST;
     private Random random = new Random();
 
@@ -228,21 +229,26 @@ public class MQClientInstance {
                 case CREATE_JUST:
                     this.serviceState = ServiceState.START_FAILED;
                     // If not specified,looking address from name server
+                    // nameServer地址不存在 去发现nameServer地址
                     if (null == this.clientConfig.getNamesrvAddr()) {
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
                     // Start request-response channel
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
+                    //开启多个定时任务
                     this.startScheduledTask();
                     // Start pull service
                     //启动拉取消息的服务
                     this.pullMessageService.start();
                     // Start rebalance service
+                    //开启负载均衡的服务
                     this.rebalanceService.start();
                     // Start push service
+                    //启动推消息服务
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
+                    //标记服务状态为启动成
                     this.serviceState = ServiceState.RUNNING;
                     break;
                 case START_FAILED:
@@ -255,65 +261,50 @@ public class MQClientInstance {
 
     private void startScheduledTask() {
         if (null == this.clientConfig.getNamesrvAddr()) {
-            this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        MQClientInstance.this.mQClientAPIImpl.fetchNameServerAddr();
-                    } catch (Exception e) {
-                        log.error("ScheduledTask fetchNameServerAddr exception", e);
-                    }
+            //定时拉取nameServer地址 延迟10s  每隔2min拉取一次
+            this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+                try {
+                    MQClientInstance.this.mQClientAPIImpl.fetchNameServerAddr();
+                } catch (Exception e) {
+                    log.error("ScheduledTask fetchNameServerAddr exception", e);
                 }
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
-
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    MQClientInstance.this.updateTopicRouteInfoFromNameServer();
-                } catch (Exception e) {
-                    log.error("ScheduledTask updateTopicRouteInfoFromNameServer exception", e);
-                }
+        //定时从nameServer上拉取topic的路由信息 延迟10ms 每隔30S拉取一次
+        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                MQClientInstance.this.updateTopicRouteInfoFromNameServer();
+            } catch (Exception e) {
+                log.error("ScheduledTask updateTopicRouteInfoFromNameServer exception", e);
             }
         }, 10, this.clientConfig.getPollNameServerInterval(), TimeUnit.MILLISECONDS);
-
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    MQClientInstance.this.cleanOfflineBroker();
-                    MQClientInstance.this.sendHeartbeatToAllBrokerWithLock();
-                } catch (Exception e) {
-                    log.error("ScheduledTask sendHeartbeatToAllBroker exception", e);
-                }
+        //心跳检测 延迟1秒  每30S执行一次
+        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                //清除离线的broker
+                MQClientInstance.this.cleanOfflineBroker();
+                //发送心跳
+                MQClientInstance.this.sendHeartbeatToAllBrokerWithLock();
+            } catch (Exception e) {
+                log.error("ScheduledTask sendHeartbeatToAllBroker exception", e);
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    MQClientInstance.this.persistAllConsumerOffset();
-                } catch (Exception e) {
-                    log.error("ScheduledTask persistAllConsumerOffset exception", e);
-                }
+        //持久化消费进度 延迟10S 每5S钟上报一次
+        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                MQClientInstance.this.persistAllConsumerOffset();
+            } catch (Exception e) {
+                log.error("ScheduledTask persistAllConsumerOffset exception", e);
             }
         }, 1000 * 10, this.clientConfig.getPersistConsumerOffsetInterval(), TimeUnit.MILLISECONDS);
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    MQClientInstance.this.adjustThreadPool();
-                } catch (Exception e) {
-                    log.error("ScheduledTask adjustThreadPool exception", e);
-                }
+        //动态调整线程池
+        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                MQClientInstance.this.adjustThreadPool();
+            } catch (Exception e) {
+                log.error("ScheduledTask adjustThreadPool exception", e);
             }
         }, 1, 1, TimeUnit.MINUTES);
     }
@@ -603,12 +594,20 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 从nameServer上更新topic的路由信息
+     * @param topic
+     * @param isDefault
+     * @param defaultMQProducer
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault, DefaultMQProducer defaultMQProducer) {
         try {
             if (this.lockNamesrv.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     TopicRouteData topicRouteData;
                     if (isDefault && defaultMQProducer != null) {
+                        //用默认的topic查找路由信息（如果允许自动创建主题 则会在服务端创建一个这样的主题） TBW102
                         topicRouteData = this.mQClientAPIImpl.getDefaultTopicRouteInfoFromNameServer(defaultMQProducer.getCreateTopicKey(),
                             1000 * 3);
                         if (topicRouteData != null) {
@@ -619,6 +618,7 @@ public class MQClientInstance {
                             }
                         }
                     } else {
+                        //从nameServer上获取topic的路由信息
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {

@@ -85,7 +85,7 @@ public class TopicPublishInfo {
                 MessageQueue mq = this.messageQueueList.get(pos);
                 /**
                  * 对比此次选中的MessageQueue与上一次发送消息的brokerName
-                 * 如果不通则选择该brokerName发送
+                 * 如果不同则选择该brokerName发送
                  * 如果只有一个broker 那么整个循环走完 也不会进入if里面 则
                  * 执行后面的selectOneMessageQueue()方法
                  */
@@ -105,7 +105,7 @@ public class TopicPublishInfo {
         if (pos < 0){
             pos = 0;
         }
-        //获取指定位置的索引
+        //获取指定索引位的队列
         return this.messageQueueList.get(pos);
     }
 

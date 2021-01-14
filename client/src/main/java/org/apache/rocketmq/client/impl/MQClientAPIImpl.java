@@ -446,7 +446,9 @@ public class MQClientAPIImpl {
         final DefaultMQProducerImpl producer
     ) throws RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
+        //请求体
         RemotingCommand request = null;
+        //获取mesType属性
         String msgType = msg.getProperty(MessageConst.PROPERTY_MESSAGE_TYPE);
         boolean isReply = msgType != null && msgType.equals(MixAll.REPLY_MESSAGE_FLAG);
         if (isReply) {
@@ -480,10 +482,13 @@ public class MQClientAPIImpl {
                     retryTimesWhenSendFailed, times, context, producer);
                 return null;
             case SYNC:
+                /**
+                 * 代码注释 方便调试
+                 */
                 long costTimeSync = System.currentTimeMillis() - beginStartTime;
-                if (timeoutMillis < costTimeSync) {
-                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
-                }
+//                if (timeoutMillis < costTimeSync) {
+//                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
+//                }
                 return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTimeSync, request);
             default:
                 assert false;
@@ -502,7 +507,9 @@ public class MQClientAPIImpl {
     ) throws RemotingException, MQBrokerException, InterruptedException {
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
         assert response != null;
-        return this.processSendResponse(brokerName, msg, response,addr);
+        //消息发送
+        final SendResult sendResult = this.processSendResponse(brokerName, msg, response, addr);
+        return sendResult;
     }
 
     private void sendMessageAsync(
@@ -718,9 +725,11 @@ public class MQClientAPIImpl {
                 assert false;
                 return null;
             case ASYNC:
+                //异步
                 this.pullMessageAsync(addr, request, timeoutMillis, pullCallback);
                 return null;
             case SYNC:
+                //同步
                 return this.pullMessageSync(addr, request, timeoutMillis);
             default:
                 assert false;
@@ -767,8 +776,10 @@ public class MQClientAPIImpl {
         final RemotingCommand request,
         final long timeoutMillis
     ) throws RemotingException, InterruptedException, MQBrokerException {
+        // 发起请求
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
         assert response != null;
+        //处理响应
         return this.processPullResponse(response, addr);
     }
 
@@ -793,10 +804,10 @@ public class MQClientAPIImpl {
             default:
                 throw new MQBrokerException(response.getCode(), response.getRemark(), addr);
         }
-
+        //解析响应头
         PullMessageResponseHeader responseHeader =
             (PullMessageResponseHeader) response.decodeCommandCustomHeader(PullMessageResponseHeader.class);
-
+        //封装结果类
         return new PullResultExt(pullStatus, responseHeader.getNextBeginOffset(), responseHeader.getMinOffset(),
             responseHeader.getMaxOffset(), null, responseHeader.getSuggestWhichBrokerId(), response.getBody());
     }
@@ -1361,11 +1372,12 @@ public class MQClientAPIImpl {
         requestHeader.setTopic(topic);
 
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.GET_ROUTEINFO_BY_TOPIC, requestHeader);
-
+        //同步调用
         RemotingCommand response = this.remotingClient.invokeSync(null, request, timeoutMillis);
         assert response != null;
         switch (response.getCode()) {
             case ResponseCode.TOPIC_NOT_EXIST: {
+                //没有找到
                 if (allowTopicNotExist) {
                     log.warn("get Topic [{}] RouteInfoFromNameServer is not exist value", topic);
                 }
@@ -1373,6 +1385,7 @@ public class MQClientAPIImpl {
                 break;
             }
             case ResponseCode.SUCCESS: {
+                //找到
                 byte[] body = response.getBody();
                 if (body != null) {
                     return TopicRouteData.decode(body, TopicRouteData.class);
