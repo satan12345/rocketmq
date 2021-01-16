@@ -250,7 +250,7 @@ public class CommitLog {
         }
     }
 
-    /**
+    /**读取一个message 返回一个DispatchRequest
      * check the message and returns the message size
      *
      * @return 0 Come the end of the file // >0 Normal messages // -1 Message checksum failure

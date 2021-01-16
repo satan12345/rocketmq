@@ -206,8 +206,9 @@ public class IndexService {
             long endPhyOffset = indexFile.getEndPhyOffset();
             DispatchRequest msg = req;
             String topic = msg.getTopic();
+            //keys来源于message的Properties
             String keys = msg.getKeys();
-            //如果消息的commitLog偏移量小于物理文件的偏移量 则直接返回
+            //如果消息的commitLog偏移量小于索引文件物理文件的偏移量 说明已经构建过索引了 直接返回
             if (msg.getCommitLogOffset() < endPhyOffset) {
                 return;
             }
@@ -221,7 +222,7 @@ public class IndexService {
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE:
                     return;
             }
-            //判断是否存在唯一索引key 如果有 则创建key 然后写入到索引文件中
+            //uniqKey是客户端生成的MessageId 也来源于Message的properties
             if (req.getUniqKey() != null) {
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {

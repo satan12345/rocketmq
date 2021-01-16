@@ -185,6 +185,7 @@ public class DefaultMessageStore implements MessageStore {
         } else {
             this.haService = null;
         }
+        //创建commitLog消息分发服务
         this.reputMessageService = new ReputMessageService();
 
         this.scheduleMessageService = new ScheduleMessageService(this);
@@ -312,7 +313,7 @@ public class DefaultMessageStore implements MessageStore {
             log.info("[SetReputOffset] maxPhysicalPosInLogicQueue={} clMinOffset={} clMaxOffset={} clConfirmedOffset={}",
                 maxPhysicalPosInLogicQueue, this.commitLog.getMinOffset(), this.commitLog.getMaxOffset(), this.commitLog.getConfirmOffset());
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
-            //
+            //启动commitLog分发的线程
             this.reputMessageService.start();
 
             /**
@@ -1584,7 +1585,7 @@ public class DefaultMessageStore implements MessageStore {
     public RunningFlags getRunningFlags() {
         return runningFlags;
     }
-
+    //CommitLogDispatcherBuildConsumeQueue CommitLogDispatcherBuildIndex consumerQueue与index两个构建器循环构建
     public void doDispatch(DispatchRequest req) {
         for (CommitLogDispatcher dispatcher : this.dispatcherList) {
             dispatcher.dispatch(req);
@@ -1594,7 +1595,7 @@ public class DefaultMessageStore implements MessageStore {
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
         //根据topic与队列找到ConsumerQueue
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
-
+        //构建
         cq.putMessagePositionInfoWrapper(dispatchRequest);
     }
 
@@ -1646,7 +1647,7 @@ public class DefaultMessageStore implements MessageStore {
             }
         }, 6, TimeUnit.SECONDS);
     }
-
+    //consumerQueue构建
     class CommitLogDispatcherBuildConsumeQueue implements CommitLogDispatcher {
 
         @Override
@@ -1665,11 +1666,15 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     * CommitLog构建Index文件的分发器
+     */
     class CommitLogDispatcherBuildIndex implements CommitLogDispatcher {
 
         @Override
         public void dispatch(DispatchRequest request) {
             if (DefaultMessageStore.this.messageStoreConfig.isMessageIndexEnable()) {
+                //构建index
                 DefaultMessageStore.this.indexService.buildIndex(request);
             }
         }
@@ -2021,11 +2026,18 @@ public class DefaultMessageStore implements MessageStore {
             return this.reputFromOffset < DefaultMessageStore.this.commitLog.getMaxOffset();
         }
 
+        /**
+         * 主要用于构建consumerQueue和Index
+         * reputFormOffSet:构建过的ConsumeQueue/index的进度
+         *
+         */
         private void doReput() {
             //判断转发的偏移量是否小于commitLog的最小的offset
             if (this.reputFromOffset < DefaultMessageStore.this.commitLog.getMinOffset()) {
-                log.warn("The reputFromOffset={} is smaller than minPyOffset={}, this usually indicate that the dispatch behind too much and the commitlog has expired.",
+                log.warn("The reputFromOffset={} is smaller than minPyOffset={}," +
+                                " this usually indicate that the dispatch behind too much and the commitlog has expired.",
                     this.reputFromOffset, DefaultMessageStore.this.commitLog.getMinOffset());
+                //将转发的偏移量设置为commitLog的最小的offSet
                 this.reputFromOffset = DefaultMessageStore.this.commitLog.getMinOffset();
             }
             for (boolean doNext = true; this.isCommitLogAvailable() && doNext; ) {
@@ -2034,17 +2046,21 @@ public class DefaultMessageStore implements MessageStore {
                     && this.reputFromOffset >= DefaultMessageStore.this.getConfirmOffset()) {
                     break;
                 }
-
+                //result存储的是已经刷过盘的commitLog的进入的reputFormOffset 就是可以构建ConsumeQueue/index的essage
                 SelectMappedBufferResult result = DefaultMessageStore.this.commitLog.getData(reputFromOffset);
                 if (result != null) {
                     try {
                         this.reputFromOffset = result.getStartOffset();
 
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
+                            //读取一个消息 封装成dispatchRequest(分发请求)
                             DispatchRequest dispatchRequest =
-                                DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
-                            int size = dispatchRequest.getBufferSize() == -1 ? dispatchRequest.getMsgSize() : dispatchRequest.getBufferSize();
-
+                                DefaultMessageStore.this.commitLog.checkMessageAndReturnSize
+                                        (result.getByteBuffer(), false, false);
+                            //获取消息大小
+                            int size = dispatchRequest.getBufferSize() == -1 ? dispatchRequest.getMsgSize() :
+                                    dispatchRequest.getBufferSize();
+                            //dispatchRequest构建成功 且消息大小大于0 则进行分发消息
                             if (dispatchRequest.isSuccess()) {
                                 if (size > 0) {
                                     //分发消息
@@ -2106,6 +2122,7 @@ public class DefaultMessageStore implements MessageStore {
                 try {
                     //每隔1毫秒执行一次数据分发的逻辑
                     Thread.sleep(1);
+                    //执行数据分发的服务
                     this.doReput();
                 } catch (Exception e) {
                     DefaultMessageStore.log.warn(this.getServiceName() + " service has exception. ", e);

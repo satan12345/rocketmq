@@ -425,7 +425,12 @@ public class ConsumeQueue {
 
     private boolean putMessagePositionInfo(final long offset, final int size, final long tagsCode,
         final long cqOffset) {
-
+        /**
+         * offset 需要构建的consumerQueue的Message的CommitLog的物理位置
+         * size：message的大小
+         * tagsCode:message的TagCode
+         * cqOffset:消息队列的逻辑偏移
+         */
         if (offset + size <= this.maxPhysicOffset) {
             log.warn("Maybe try to build consume queue repeatedly maxPhysicOffset={} phyOffset={}", maxPhysicOffset, offset);
             return true;
@@ -438,10 +443,13 @@ public class ConsumeQueue {
         this.byteBufferIndex.putLong(tagsCode);
 
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
-
+        //根据期望的绝对位置找到对应某个ConsumeQueue文件的MappedFile
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
-
+            /**
+             * 如果mappedFileQueue的MappedFile list被清除
+             * 需要保证消息队列的逻辑位置和ConsumeQueue文件的起始文件位置 和偏移量保持一致 要补充空的逻辑消息
+             */
             if (mappedFile.isFirstCreateInQueue() && cqOffset != 0 && mappedFile.getWrotePosition() == 0) {
                 this.minLogicOffset = expectLogicOffset;
                 this.mappedFileQueue.setFlushedWhere(expectLogicOffset);
