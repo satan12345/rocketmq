@@ -74,7 +74,9 @@ public class RunningFlags {
             return true;
         }
 
-        return false;
+//        return false;
+        //TODO 为了测试 修改成true
+        return true;
     }
 
     //for consume queue, just ignore the DISK_FULL_BIT

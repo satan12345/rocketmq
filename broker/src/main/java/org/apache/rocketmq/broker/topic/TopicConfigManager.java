@@ -149,10 +149,24 @@ public class TopicConfigManager extends ConfigManager {
         }
     }
 
+    /**
+     * 查找topic的配置信息
+     * @param topic
+     * @return
+     */
     public TopicConfig selectTopicConfig(final String topic) {
         return this.topicConfigTable.get(topic);
     }
 
+    /**
+     * 在发送消息的方法中创建topic
+     * @param topic
+     * @param defaultTopic
+     * @param remoteAddress
+     * @param clientDefaultTopicQueueNums
+     * @param topicSysFlag
+     * @return
+     */
     public TopicConfig createTopicInSendMessageMethod(final String topic, final String defaultTopic,
         final String remoteAddress, final int clientDefaultTopicQueueNums, final int topicSysFlag) {
         TopicConfig topicConfig = null;
@@ -161,13 +175,20 @@ public class TopicConfigManager extends ConfigManager {
         try {
             if (this.lockTopicConfigTable.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
+                    //进入临界区后再找一次 找到则返回
                     topicConfig = this.topicConfigTable.get(topic);
                     if (topicConfig != null)
                         return topicConfig;
-
+                    /**
+                     * 获取默认的topic的配置信息
+                     * 如果存在默认的topic信息
+                     * 如果存在默认的topic信息 并且打开了自动创建topic的开关 根据默认的topic的config来生成新的topic的config
+                     */
                     TopicConfig defaultTopicConfig = this.topicConfigTable.get(defaultTopic);
                     if (defaultTopicConfig != null) {
+                        //判断默认的topic名是否是TBW102
                         if (defaultTopic.equals(TopicValidator.AUTO_CREATE_TOPIC_KEY_TOPIC)) {
+
                             if (!this.brokerController.getBrokerConfig().isAutoCreateTopicEnable()) {
                                 defaultTopicConfig.setPerm(PermName.PERM_READ | PermName.PERM_WRITE);
                             }
@@ -199,7 +220,7 @@ public class TopicConfigManager extends ConfigManager {
                         log.warn("Create new topic failed, because the default topic[{}] not exist. producer:[{}]",
                             defaultTopic, remoteAddress);
                     }
-
+                    //topicConfig信息不为空 注册topic的配置信息
                     if (topicConfig != null) {
                         log.info("Create new topic by default topic:[{}] config:[{}] producer:[{}]",
                             defaultTopic, topicConfig, remoteAddress);
@@ -221,6 +242,7 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         if (createNew) {
+            //想nameServer注册topic 同步topic信息给slave
             this.brokerController.registerBrokerAll(false, true, true);
         }
 

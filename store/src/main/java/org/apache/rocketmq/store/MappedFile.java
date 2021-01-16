@@ -258,7 +258,7 @@ public class MappedFile extends ReferenceResource {
         assert cb != null;
         //获得写入文件的指针
         int currentPos = this.wrotePosition.get();
-        //判断是否小于文件大小
+        //判断当前位置是否小于文件大小
         if (currentPos < this.fileSize) {
             //创建缓冲区
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
@@ -266,13 +266,17 @@ public class MappedFile extends ReferenceResource {
             AppendMessageResult result;
             //消息写入缓冲区
             if (messageExt instanceof MessageExtBrokerInner) {
+                //处理单个消息
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBrokerInner) messageExt);
             } else if (messageExt instanceof MessageExtBatch) {
+                //追加批量详细
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBatch) messageExt);
             } else {
                 return new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR);
             }
+            //更新写位置
             this.wrotePosition.addAndGet(result.getWroteBytes());
+            //更新存储的时间戳
             this.storeTimestamp = result.getStoreTimestamp();
             return result;
         }

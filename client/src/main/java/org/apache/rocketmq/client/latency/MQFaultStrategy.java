@@ -26,11 +26,13 @@ public class MQFaultStrategy {
     private final static InternalLogger log = ClientLogger.getLog();
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
     /**
-     * 消息发送失败 默认延迟机制
+     * 是否启用故障延迟机制
      */
-    private boolean sendLatencyFaultEnable = false;
-
-    private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
+    private boolean sendLatencyFaultEnable = true;
+    /**
+     * 根据延迟时间确定不可用的间隔
+     */
+    private long[] latencyMax =           {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
     private long[] notAvailableDuration = {0L, 0L, 30000L, 60000L, 120000L, 180000L, 600000L};
 
     public long[] getNotAvailableDuration() {
@@ -105,6 +107,11 @@ public class MQFaultStrategy {
         }
     }
 
+    /**
+     * 根据发送消息延迟的时长计算不可用的时间间隔
+     * @param currentLatency
+     * @return
+     */
     private long computeNotAvailableDuration(final long currentLatency) {
         for (int i = latencyMax.length - 1; i >= 0; i--) {
             if (currentLatency >= latencyMax[i])

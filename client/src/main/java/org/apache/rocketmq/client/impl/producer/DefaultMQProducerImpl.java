@@ -584,10 +584,12 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             String[] brokersSent = new String[timesTotal];
             //消息发送重试机制
             for (; times < timesTotal; times++) {
-                String lastBrokerName = null == mq ? null : mq.getBrokerName();//保存上次发送消息的broker名称
+                //保存上次发送消息的broker名称
+                String lastBrokerName = null == mq ? null : mq.getBrokerName();
                 //查找一个消息队列
                 MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);
                 if (mqSelected != null) {
+                    //保存选中的MQ
                     mq = mqSelected;
                     brokersSent[times] = mq.getBrokerName();
                     try {
@@ -605,6 +607,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         //发送消息
                         sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
                         endTimestamp = System.currentTimeMillis();
+                        //规避失败的broker
                         this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
                         switch (communicationMode) {
                             case ASYNC:
@@ -814,9 +817,12 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 //发送消息--封装请求头
                 SendMessageRequestHeader requestHeader = new SendMessageRequestHeader();
                 requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
+                //设置topic
                 requestHeader.setTopic(msg.getTopic());
+                //设置默认的topic TBW102
                 requestHeader.setDefaultTopic(this.defaultMQProducer.getCreateTopicKey());
                 requestHeader.setDefaultTopicQueueNums(this.defaultMQProducer.getDefaultTopicQueueNums());
+                //设置队列id
                 requestHeader.setQueueId(mq.getQueueId());
                 requestHeader.setSysFlag(sysFlag);
                 requestHeader.setBornTimestamp(System.currentTimeMillis());

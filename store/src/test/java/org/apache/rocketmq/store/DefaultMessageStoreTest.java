@@ -114,7 +114,7 @@ public class DefaultMessageStoreTest {
         messageStoreConfig.setFlushIntervalConsumeQueue(1);
         return new DefaultMessageStore(messageStoreConfig, new BrokerStatsManager("simpleTest"), new MyMessageArrivingListener(), new BrokerConfig());
     }
-
+    //消息写入存储测试
     @Test
     public void testWriteAndRead() {
         long ipv4HostMsgs = 10;
@@ -122,8 +122,10 @@ public class DefaultMessageStoreTest {
         long totalMsgs = ipv4HostMsgs + ipv6HostMsgs;
         QUEUE_TOTAL = 1;
         MessageBody = StoreMessage.getBytes();
+        MessageExtBrokerInner messageExtBrokerInner = buildMessage();
         for (long i = 0; i < ipv4HostMsgs; i++) {
-            messageStore.putMessage(buildMessage());
+
+            messageStore.putMessage(messageExtBrokerInner);
         }
 
         for (long i = 0; i < ipv6HostMsgs; i++) {
